@@ -17,6 +17,15 @@
 #define PI 3.141592
 #define sat(x) clamp(x, 0.0, 1.0)
 
+// Host-provided uniforms
+uniform float time;
+uniform vec2 resolution;
+uniform float u_value;
+uniform float u_value2;
+uniform float u_value3;
+uniform float u_value4;
+uniform float u_value5;
+
 const float SKULL_START_SECONDS = 26.0;
 const float SKULL_FADE_SECONDS = 4.0;
 const float FRONT_LOCK_SECONDS = 18.0;
@@ -198,12 +207,8 @@ float sabs(float x){
 }
 
 float f2(vec3 p){
-    float sdf = p.y;
-    for(float j = 2.56; j < 6.0; j += j){
-        sdf += (sabs(dot(sin(p.z*0.1 + p/j), vec3(0.2))) - 0.1) * j;
-    }
-    sdf = min(sdf, p.y + H);
-    return sdf;
+    // Reserved for future terrain/noise use; kept GLSL-ES safe.
+    return p.y;
 }
 
 float JawOpenAmount(){

@@ -17,11 +17,13 @@
     <label>Brightness (u_value): <input id="bright" type="range" min="0" max="1" step="0.001" value="0.8"></label>
     <label>Detail (u_value3): <input id="detail" type="range" min="0" max="1" step="0.001" value="0.65"></label>
   </div>
+  <pre id="err" style="position:fixed;left:12px;bottom:12px;max-width:70vw;max-height:30vh;overflow:auto;background:#200c;color:#f88;padding:8px;border:1px solid #833;border-radius:6px;display:none"></pre>
   <canvas id="c"></canvas>
 <script>
 const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl');
 if (!gl) throw new Error('WebGL not supported');
+const errBox = document.getElementById('err');
 
 const vert = `attribute vec2 a; void main(){ gl_Position=vec4(a,0.,1.); }`;
 
@@ -33,7 +35,7 @@ async function run(){
     const s = gl.createShader(type);
     gl.shaderSource(s, src);
     gl.compileShader(s);
-    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { const msg = gl.getShaderInfoLog(s); errBox.style.display='block'; errBox.textContent = msg; throw new Error(msg); }
     return s;
   }
 
@@ -41,7 +43,7 @@ async function run(){
   const fs = compile(gl.FRAGMENT_SHADER, frag);
   const prog = gl.createProgram();
   gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
-  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) { const msg = gl.getProgramInfoLog(prog); errBox.style.display='block'; errBox.textContent = msg; throw new Error(msg); }
   gl.useProgram(prog);
 
   const buf = gl.createBuffer();
@@ -80,7 +82,7 @@ async function run(){
   }
   requestAnimationFrame(frame);
 }
-run().catch(err => { console.error(err); alert(err.message); });
+run().catch(err => { console.error(err); errBox.style.display='block'; errBox.textContent = err.message; });
 </script>
 </body>
 </html>
