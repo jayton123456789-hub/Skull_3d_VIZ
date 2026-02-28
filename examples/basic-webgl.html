@@ -1,0 +1,232 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dull Skull Avatar Demo</title>
+  <style>
+    html,body{margin:0;height:100%;background:#0b0b0f;color:#ddd;font-family:Inter,system-ui,sans-serif}
+    canvas{width:100vw;height:100vh;display:block}
+    #ui{position:fixed;left:14px;top:14px;background:#0f1117d9;border:1px solid #2a2f3a;padding:12px;border-radius:12px;min-width:320px;backdrop-filter: blur(4px)}
+    h1{font-size:14px;margin:0 0 8px 0;color:#f2f4f8}
+    label{display:block;font-size:12px;margin-top:8px;color:#c8d0df}
+    input[type="range"],select,button{width:100%;margin-top:4px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+    .hint{font-size:11px;color:#9ba6bb;margin-top:8px;line-height:1.35}
+    #status{margin-top:8px;font-size:12px;color:#8ef0b0}
+    #err{position:fixed;left:14px;bottom:14px;max-width:70vw;max-height:30vh;overflow:auto;background:#2a1010d9;color:#ff9b9b;padding:10px;border:1px solid #8d3b3b;border-radius:8px;display:none}
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <h1>Dull Skull Avatar — Speech Driver</h1>
+
+    <label>Audio source
+      <select id="sourceType">
+        <option value="mic">Microphone</option>
+        <option value="tab">Tab audio (via Share Tab)</option>
+        <option value="desktop">Desktop/System audio (via Share Screen)</option>
+      </select>
+    </label>
+
+    <div class="row">
+      <button id="startAudio">Start audio input</button>
+      <button id="stopAudio">Stop audio input</button>
+    </div>
+
+    <label>Speech energy (manual override)
+      <input id="energy" type="range" min="0" max="1" step="0.001" value="0.2">
+    </label>
+
+    <label>Use live audio input
+      <input id="useAudio" type="checkbox" checked>
+    </label>
+
+    <label>Brightness (u_value)
+      <input id="bright" type="range" min="0" max="1" step="0.001" value="0.82">
+    </label>
+
+    <label>Detail (u_value3)
+      <input id="detail" type="range" min="0" max="1" step="0.001" value="0.7">
+    </label>
+
+    <label>Audio sensitivity
+      <input id="sens" type="range" min="0.3" max="3" step="0.01" value="1.35">
+    </label>
+
+    <label>Jaw smoothing
+      <input id="smooth" type="range" min="0.02" max="0.6" step="0.01" value="0.18">
+    </label>
+
+    <div id="status">Audio: idle</div>
+    <div class="hint">
+      Tip: for tab/desktop modes your browser will prompt for screen share.
+      Enable "Share tab audio" or system audio in that prompt.
+    </div>
+  </div>
+
+  <pre id="err"></pre>
+  <canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl');
+if (!gl) throw new Error('WebGL not supported');
+
+const errBox = document.getElementById('err');
+const sourceType = document.getElementById('sourceType');
+const startAudioBtn = document.getElementById('startAudio');
+const stopAudioBtn = document.getElementById('stopAudio');
+const useAudio = document.getElementById('useAudio');
+const statusEl = document.getElementById('status');
+
+const energy = document.getElementById('energy');
+const bright = document.getElementById('bright');
+const detail = document.getElementById('detail');
+const sens = document.getElementById('sens');
+const smooth = document.getElementById('smooth');
+
+const vert = `attribute vec2 a; void main(){ gl_Position=vec4(a,0.,1.); }`;
+
+let audioCtx = null;
+let analyser = null;
+let mediaStream = null;
+let liveEnergy = +energy.value;
+
+function setStatus(msg, ok=true){
+  statusEl.textContent = `Audio: ${msg}`;
+  statusEl.style.color = ok ? '#8ef0b0' : '#ff9b9b';
+}
+
+async function startAudioInput() {
+  stopAudioInput();
+  const mode = sourceType.value;
+  try {
+    if (mode === 'mic') {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } else {
+      mediaStream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+    }
+
+    const audioTracks = mediaStream.getAudioTracks();
+    if (!audioTracks.length) throw new Error('No audio track received. Re-run and enable audio in share prompt.');
+
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    await audioCtx.resume();
+    const src = audioCtx.createMediaStreamSource(new MediaStream([audioTracks[0]]));
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.7;
+    src.connect(analyser);
+
+    setStatus(`${mode} connected`);
+  } catch (e) {
+    setStatus(e.message || 'audio start failed', false);
+  }
+}
+
+function stopAudioInput() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+  if (audioCtx) {
+    audioCtx.close();
+    audioCtx = null;
+  }
+  analyser = null;
+  setStatus('idle');
+}
+
+function readAudioEnergy() {
+  if (!analyser) return +energy.value;
+  const data = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(data);
+  let sum = 0;
+  for (let i=0; i<data.length; i++) {
+    const v = (data[i] - 128) / 128;
+    sum += v*v;
+  }
+  const rms = Math.sqrt(sum / data.length);
+  const target = Math.min(1, rms * (+sens.value));
+  const k = +smooth.value;
+  liveEnergy += (target - liveEnergy) * k;
+  return liveEnergy;
+}
+
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    const msg = gl.getShaderInfoLog(s);
+    errBox.style.display='block';
+    errBox.textContent = msg;
+    throw new Error(msg);
+  }
+  return s;
+}
+
+async function run(){
+  const fragSource = await fetch('../shaders/dull_skull.frag').then(r=>r.text());
+  const frag = `precision highp float;\n${fragSource}`;
+
+  const vs = compile(gl.VERTEX_SHADER, vert);
+  const fs = compile(gl.FRAGMENT_SHADER, frag);
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    const msg = gl.getProgramInfoLog(prog);
+    errBox.style.display='block';
+    errBox.textContent = msg;
+    throw new Error(msg);
+  }
+  gl.useProgram(prog);
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const a = gl.getAttribLocation(prog, 'a');
+  gl.enableVertexAttribArray(a);
+  gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+
+  const U = {
+    time: gl.getUniformLocation(prog, 'time'),
+    resolution: gl.getUniformLocation(prog, 'resolution'),
+    u_value: gl.getUniformLocation(prog, 'u_value'),
+    u_value3: gl.getUniformLocation(prog, 'u_value3'),
+    u_value4: gl.getUniformLocation(prog, 'u_value4'),
+  };
+
+  const t0 = performance.now();
+  function frame(now){
+    const w = canvas.width = innerWidth * devicePixelRatio;
+    const h = canvas.height = innerHeight * devicePixelRatio;
+    gl.viewport(0,0,w,h);
+
+    const jawEnergy = useAudio.checked ? readAudioEnergy() : +energy.value;
+
+    gl.uniform1f(U.time, (now - t0)/1000);
+    gl.uniform2f(U.resolution, w, h);
+    gl.uniform1f(U.u_value, +bright.value);
+    gl.uniform1f(U.u_value3, +detail.value);
+    gl.uniform1f(U.u_value4, jawEnergy);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+startAudioBtn.addEventListener('click', startAudioInput);
+stopAudioBtn.addEventListener('click', stopAudioInput);
+window.addEventListener('beforeunload', stopAudioInput);
+
+run().catch(err => {
+  console.error(err);
+  errBox.style.display='block';
+  errBox.textContent = err.message;
+});
+</script>
+</body>
+</html>
