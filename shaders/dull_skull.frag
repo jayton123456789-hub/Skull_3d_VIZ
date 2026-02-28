@@ -17,6 +17,7 @@
 #define PI 3.141592
 #define sat(x) clamp(x, 0.0, 1.0)
 
+
 // Host-provided uniforms
 uniform float time;
 uniform vec2 resolution;

@@ -49,3 +49,13 @@ Edit constants in `shaders/dull_skull.frag`:
 - Native wrappers: pass uniform values from host audio engine
 
 If you need phoneme-level lip sync, keep this jaw envelope as fallback and blend with phoneme viseme weights on top.
+
+
+## Capture source options
+
+The included demo supports:
+
+- microphone (`getUserMedia`)
+- tab/desktop/system paths (`getDisplayMedia` with audio)
+
+In production apps, use whatever source is available and continue mapping final envelope to `u_value4`.

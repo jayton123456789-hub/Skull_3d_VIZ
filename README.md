@@ -1,86 +1,102 @@
-# Dull Skull Avatar Shader
+# 💀 Dull Skull Avatar
 
-A standalone GLSL skull avatar designed for **AI assistant speaking visualization**.
+A real-time **3D raymarched skull avatar** designed for speech visualization.
+It is built to be dropped into apps where an AI assistant (or any voice source) needs a speaking visual identity.
 
-- Static, front-facing skull (no camera drift)
-- Fully raymarched 3D SDF skull
-- Audio-reactive jaw movement (speech-energy input)
-- Easy to embed in WebGL-based apps
+## ✨ What this is
 
-## Repository layout
+- Static, front-facing skull avatar (stable composition)
+- Fully SDF raymarched 3D shader (not a 2D sprite)
+- Audio-driven jaw animation (`u_value4` = speaking energy)
+- Lightweight WebGL demo included
+- GitHub Pages workflow included
 
-- `shaders/dull_skull.frag` — main shader
-- `examples/basic-webgl.html` — minimal drop-in WebGL demo
-- `docs/INTEGRATION.md` — integration guide for apps
-- `docs/SHADER_OVERVIEW.md` — how the shader works
+## 📁 Project structure
 
-## Quick start
+- `shaders/dull_skull.frag` — production shader
+- `examples/basic-webgl.html` — demo runner with audio source selector
+- `docs/INTEGRATION.md` — embedding guide for app developers
+- `docs/SHADER_OVERVIEW.md` — shader architecture and tuning notes
+- `.github/workflows/pages.yml` — Pages deployment workflow
+- `RUN.bat` — one-click Windows launcher
 
-### 1) Run the example
+## 🚀 Quick start
 
-Serve this repo with any static server, then open `examples/basic-webgl.html`.
+### Option A: Windows one-click
 
-Examples:
+Double-click `RUN.bat`.
+
+It will:
+1. start a local server,
+2. open the demo in a browser tab,
+3. serve `examples/basic-webgl.html`.
+
+### Option B: Manual
 
 ```bash
 python -m http.server 8080
-# or
-npx serve .
 ```
 
-Open:
+Then open:
 
 - `http://localhost:8080/examples/basic-webgl.html`
 
-### 2) Drive speaking energy
+## 🎙 Audio control modes in the demo
 
-Update uniform `u_value4` each frame with a value in `[0..1]`:
+The demo includes an **Audio source** dropdown:
 
-- `0.0` = mouth mostly closed
-- `1.0` = mouth opens widest
+- `Microphone` — direct mic capture
+- `Tab audio` — choose browser tab + enable tab audio in share dialog
+- `Desktop/System audio` — screen share path with system audio enabled
 
-In a real app, map this to audio RMS/envelope.
+Click **Start audio input** to attach the selected source.
 
-## Uniforms (current behavior)
+## 🎛 Main uniforms used
 
-- `time` — seconds
+- `time` — elapsed seconds
 - `resolution` — viewport size
 - `u_value` — brightness
-- `u_value3` — detail/march quality
-- `u_value4` — **speech energy / jaw input**
+- `u_value3` — detail quality
+- `u_value4` — speech energy input (jaw driver)
 
-(Other legacy uniforms may exist for compatibility but are not required for static speaking mode.)
+## 🗣 Jaw sensitivity tuning
 
-## Jaw sensitivity tuning
+Edit these constants in `shaders/dull_skull.frag`:
 
-Jaw behavior is controlled by constants near the top of `shaders/dull_skull.frag`:
+- `JAW_OPEN_MIN` — lower trigger threshold
+- `JAW_OPEN_MAX` — upper threshold for full opening
+- `JAW_OPEN_CURVE` — response curve shape
+- `JAW_ANGLE_MAX` — maximum jaw opening angle
 
-- `JAW_OPEN_MIN` — lower threshold (smaller = reacts sooner)
-- `JAW_OPEN_MAX` — upper threshold (smaller = reaches max faster)
-- `JAW_OPEN_CURVE` — response curve (smaller = more sensitive early)
-- `JAW_ANGLE_MAX` — maximum jaw rotation angle
+### Tuning intuition
 
-Default values are tuned for speech-like motion and can be edited safely.
+- More sensitive speaking:
+  - lower `JAW_OPEN_MIN`
+  - lower `JAW_OPEN_CURVE`
+  - increase `JAW_ANGLE_MAX`
+- Less twitchy speaking:
+  - raise `JAW_OPEN_MIN`
+  - increase smoothing in app-side envelope follower
 
-## Standalone 3D note
+## 🧠 Integration concept (for AI assistant avatars)
 
-This version removes the old plane blending that made the skull look like it was sinking/morphing out of the background. The skull now renders as a standalone 3D avatar against a separate dark backdrop.
+1. Compute audio envelope (RMS/peak) from assistant voice output.
+2. Normalize to `[0..1]`.
+3. Smooth with attack/release.
+4. Feed that value to `u_value4` each frame.
 
-## Open-source customization suggestions
+That’s enough to get convincing speaking motion.
 
-- Change eye color/glow in `mainImage` eye material branch
-- Adjust camera distance by editing `ro` in `mainImage`
-- Tune quality/perf with `u_value3` and march steps
-- Build expression presets by remapping `u_value4`
-
-For full details see `docs/INTEGRATION.md` and `docs/SHADER_OVERVIEW.md`.
-
-## GitHub Pages deployment
+## 🌐 Publish as GitHub Pages
 
 1. Push this repo to GitHub.
-2. In **Settings → Pages**, set source to **GitHub Actions**.
-3. Add a simple static-pages workflow (or use any static deploy action).
-4. Your demo URL will be:
+2. Enable **Settings → Pages → GitHub Actions**.
+3. Workflow deploys automatically from `main`.
+4. Share URL:
    - `https://<your-user>.github.io/<repo>/examples/basic-webgl.html`
 
-This lets friends test instantly and copy the integration pattern.
+## 🛠 Notes
+
+- The shader is intentionally static and avatar-focused.
+- Demo now surfaces shader compile/link errors in-page for easier debugging.
+- If browser audio capture yields silence, re-run and ensure audio sharing is enabled in the browser prompt.
